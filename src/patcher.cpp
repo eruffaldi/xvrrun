@@ -84,7 +84,7 @@ BOOL CPatch::HookFunction(long FuncToHook, long  MyHook, long* NewCallAddress, b
 
 			*NewCallAddress = reinterpret_cast<long>(m_PatchInstructionSet);
 			m_RestorePatchSet = new char[rewrite_len]; //not executable memory backup
-			char InstructionSet[long_jmp_len] = {0xE9, 0x00, 0x00, 0x00, 0x00};
+			unsigned char InstructionSet[long_jmp_len] = {0xE9, 0x00, 0x00, 0x00, 0x00};
 			//ZeroMemory(m_PatchInstructionSet, new_instruction_set_len);
 
 			//generating code

@@ -323,6 +323,7 @@ class Configurations;
 class Configuration
 {
 public:	
+	unsigned long long hwnd;
 	std::string shape; // W x H [: bits][@rate]
 	std::string name;
 	std::string application;
@@ -787,7 +788,7 @@ LRESULT CALLBACK XWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	return 0;
 }
 
-WPARAM WINAPI XDisplayWeb(HINSTANCE hInstance, HINSTANCE hInstNULL, LPSTR lpszCmdLine, int nCmdShow, bool istext, const char * title,const char * html_or_url,bool fullscreen,int defmonitor,int monitorpt, int x, int y, int width,int height)
+WPARAM WINAPI XDisplayWeb(HWND parent, HINSTANCE hInstance, HINSTANCE hInstNULL, LPSTR lpszCmdLine, int nCmdShow, bool istext, const char * title,const char * html_or_url,bool fullscreen,int defmonitor,int monitorpt, int x, int y, int width,int height)
 {
 	WNDCLASSEX wc;
 	HWND hwnd;
@@ -815,6 +816,12 @@ WPARAM WINAPI XDisplayWeb(HINSTANCE hInstance, HINSTANCE hInstNULL, LPSTR lpszCm
 		return 0;
 	}
 
+	if(parent)
+	{
+		x = 0;
+		y = 0;
+	}
+
 	// Step 2: Creating the Window
 	hwnd = CreateWindowEx(
 		0,
@@ -823,6 +830,19 @@ WPARAM WINAPI XDisplayWeb(HINSTANCE hInstance, HINSTANCE hInstNULL, LPSTR lpszCm
 		WS_OVERLAPPEDWINDOW,
 		x,y,width,height,
 		HWND_DESKTOP, NULL, hInstance, NULL);
+	// SetWindowPos(hwnd, 0, 0, 0, ClientWidth, ClientHeight, SWP_ASYNCWINDOWPOS);
+
+	// http://stackoverflow.com/questions/170800/embedding-hwnd-into-external-process-using-setparent
+
+	//Remove WS_POPUP style and add WS_CHILD style
+	DWORD style = GetWindowLong(hwnd,GWL_STYLE);
+	style = style & ~(WS_CAPTION | WS_THICKFRAME | WS_MINIMIZE | WS_POPUP | WS_MAXIMIZE | WS_SYSMENU);
+	style = style | WS_CHILD;
+	SetWindowLong(hwnd,GWL_STYLE,style);
+
+	if(parent)
+		SetParent(hwnd,parent);
+
 	// TODO specify window size somewhere!
 
 	if(hwnd == NULL)
@@ -1137,7 +1157,7 @@ bool RunConfiguration(Configuration & c,const char * target)
         // bool fullscreen
         // int defmonitor
         // int monitorpt
-        bool b = XDisplayWeb((HINSTANCE)GetModuleHandle (NULL),0,"",SW_SHOW,textmode,target,textmode ? text.c_str():makeabs(target).c_str(),c.fullscreen,c.fullscreenmonitor,c.monitorpt,
+        bool b = XDisplayWeb((HWND)c.hwnd,(HINSTANCE)GetModuleHandle (NULL),0,"",SW_SHOW,textmode,target,textmode ? text.c_str():makeabs(target).c_str(),c.fullscreen,c.fullscreenmonitor,c.monitorpt,
             x,y,width,height) !=0;
 
 		if(doredirect)
@@ -1305,10 +1325,14 @@ int main(int argc, char * argv[])
 	bool spawned = false;
 	bool noauto = false;
 	int idx = 0;
+	unsigned long long hwnd = 0;
 	GetModuleFileName(0,exepath,sizeof(exepath));
 	char * xp = strrchr(exepath,'\\');
 	if(xp != 0)
 		*xp = 0;
+
+	for(int i = 0; i < argc; i++)
+		printf("%d: %s\n",i,argv[i]);
 
 	for(int i = 1; i < argc; i++)
 	{
@@ -1326,6 +1350,11 @@ int main(int argc, char * argv[])
 		else if(strcmp(argv[i],"-f") == 0)
 		{
 			localconfigfile = argv[i+1];
+			i++;
+		}
+		else if(strcmp(argv[i],"-w") == 0)
+		{
+			sscanf(argv[i+1],"%llu",&hwnd);
 			i++;
 		}
 		else if(strcmp(argv[i],"-l") == 0)
@@ -1381,8 +1410,11 @@ int main(int argc, char * argv[])
 		DialogBox(hInstance, MAKEINTRESOURCE(IDD_MAIN), NULL, DlgProc);
 	else
 		configurations.active = configurations.confs[activeconfig];
+
+
 	if(configurations.active != 0)
 	{
+		configurations.active->hwnd = hwnd;
 		Configuration & c = *configurations.active;
 		if(c.netrenderon && !spawned)
 		{
